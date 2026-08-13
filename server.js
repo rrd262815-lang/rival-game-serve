@@ -1,378 +1,1056 @@
 const express = require("express");
+
 const app = express();
 
 app.use(express.json());
 
-const players = {};
-const parties = {};
-const elections = {};
+/* =========================
+   CORS
+========================= */
 
-const regions = ["Şimal", "Şərq", "Qərb", "Cənub"];
+app.use((req, res, next) => {
 
-app.get("/", (req, res) => {
-    res.send("Rival Game Multiplayer Server işləyir! ⚔️");
+    res.header("Access-Control-Allow-Origin", "*");
+    res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept");
+    res.header("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+
+    if (req.method === "OPTIONS") {
+        return res.sendStatus(200);
+    }
+
+    next();
 });
 
-/* ================= LOGIN ================= */
+
+/* =========================
+   DATABASE
+========================= */
+
+let players = {};
+let parties = {};
+let elections = {};
+let wars = {};
+
+
+/* =========================
+   REGIONS
+========================= */
+
+const regions = [
+    "Şimal",
+    "Şərq",
+    "Qərb",
+    "Cənub"
+];
+
+
+/* =========================
+   HOME
+========================= */
+
+app.get("/", (req, res) => {
+
+    res.send("⚔️ Rival Game Multiplayer Server işləyir!");
+
+});
+
+
+/* =========================
+   LOGIN
+========================= */
 
 app.post("/api/login", (req, res) => {
 
-    const name = String(req.body.name || "").trim();
+    const { name } = req.body;
 
-    if (!name) {
+    if (!name || name.trim() === "") {
+
         return res.status(400).json({
             error: "Ad yazılmalıdır"
         });
+
     }
 
-    const key = name.toLowerCase();
+    const cleanName = name.trim();
+    const key = cleanName.toLowerCase();
+
 
     if (!players[key]) {
+
         players[key] = {
-            name: name,
+
+            name: cleanName,
+
             money: 100,
+
             power: 0,
             stamina: 0,
             moneyStat: 0,
             training: 0,
+
             region: "Şimal",
+
             party: null
+
         };
+
     }
 
+
     res.json({
+
         success: true,
+
         player: players[key]
+
     });
+
 });
 
-/* ================= PLAYER ================= */
+
+/* =========================
+   GET PLAYER
+========================= */
 
 app.get("/api/player/:name", (req, res) => {
 
-    const key = req.params.name.toLowerCase();
+    const key =
+        decodeURIComponent(
+            req.params.name
+        ).toLowerCase();
+
 
     if (!players[key]) {
+
         return res.status(404).json({
+
             error: "Oyunçu tapılmadı"
+
         });
+
     }
 
+
     res.json(players[key]);
+
 });
 
-/* ================= ALL PLAYERS ================= */
+
+/* =========================
+   ALL PLAYERS
+========================= */
 
 app.get("/api/players", (req, res) => {
+
     res.json(players);
+
 });
 
-/* ================= WORK ================= */
+
+/* =========================
+   WORK
+========================= */
 
 app.post("/api/work", (req, res) => {
 
-    const key = String(req.body.name || "").toLowerCase();
+    const { name } = req.body;
 
-    if (!players[key]) {
-        return res.status(404).json({
-            error: "Oyunçu tapılmadı"
+    if (!name) {
+
+        return res.status(400).json({
+            error: "Ad yoxdur"
         });
+
     }
 
-    const player = players[key];
 
-    const income = 10 + player.moneyStat * 0.5;
+    const key =
+        name.toLowerCase();
+
+
+    if (!players[key]) {
+
+        return res.status(404).json({
+
+            error: "Oyunçu tapılmadı"
+
+        });
+
+    }
+
+
+    const player =
+        players[key];
+
+
+    const income =
+        10 +
+        (player.moneyStat * 0.5);
+
 
     player.money += income;
 
+
     res.json({
+
         success: true,
-        player: player,
+
         money: player.money,
-        income: income
+
+        income: income,
+
+        player: player
+
     });
+
 });
 
-/* ================= UPDATE PLAYER ================= */
+
+/* =========================
+   UPDATE PLAYER
+========================= */
 
 app.post("/api/update", (req, res) => {
 
-    const key = String(req.body.name || "").toLowerCase();
+    const { name, data } = req.body;
 
-    if (!players[key]) {
-        return res.status(404).json({
-            error: "Oyunçu tapılmadı"
+
+    if (!name) {
+
+        return res.status(400).json({
+            error: "Ad yoxdur"
         });
+
     }
 
-    const data = req.body.data || {};
 
-    const allowed = [
-        "money",
-        "power",
-        "stamina",
-        "moneyStat",
-        "training",
-        "region",
-        "party"
-    ];
+    const key =
+        name.toLowerCase();
 
-    allowed.forEach(field => {
-        if (data[field] !== undefined) {
-            players[key][field] = data[field];
-        }
-    });
+
+    if (!players[key]) {
+
+        return res.status(404).json({
+
+            error: "Oyunçu tapılmadı"
+
+        });
+
+    }
+
+
+    if (!data || typeof data !== "object") {
+
+        return res.status(400).json({
+
+            error: "Məlumat düzgün deyil"
+
+        });
+
+    }
+
+
+    players[key] = {
+
+        ...players[key],
+
+        ...data
+
+    };
+
 
     res.json({
+
         success: true,
+
         player: players[key]
+
     });
+
 });
 
-/* ================= RANKING ================= */
+
+/* =========================
+   RANKING
+========================= */
 
 app.get("/api/ranking", (req, res) => {
 
-    const ranking = Object.keys(players)
-        .map(key => {
+    const ranking =
+        Object.values(players)
 
-            const p = players[key];
+        .filter(player =>
+            player.name.toLowerCase() !== "admin"
+        )
+
+        .map(player => {
+
+            const total =
+                Number(player.power || 0) +
+                Number(player.stamina || 0) +
+                Number(player.moneyStat || 0) +
+                Number(player.training || 0);
+
 
             return {
-                key: key,
-                name: p.name,
-                power: p.power,
-                stamina: p.stamina,
-                moneyStat: p.moneyStat,
-                training: p.training,
-                total:
-                    p.power +
-                    p.stamina +
-                    p.moneyStat +
-                    p.training
+
+                name: player.name,
+
+                power: player.power,
+
+                stamina: player.stamina,
+
+                moneyStat: player.moneyStat,
+
+                training: player.training,
+
+                total: total
+
             };
 
         })
-        .sort((a, b) => b.total - a.total);
+
+
+        .sort((a, b) =>
+            b.total - a.total
+        );
+
 
     res.json(ranking);
+
 });
 
-/* ================= PARTIES ================= */
+
+/* =========================
+   PARTIES
+========================= */
 
 app.get("/api/parties", (req, res) => {
+
     res.json(parties);
+
 });
 
-app.post("/api/party", (req, res) => {
+
+/* =========================
+   CREATE PARTY
+========================= */
+
+app.post("/api/party/create", (req, res) => {
 
     const { name, partyName } = req.body;
 
-    const key = String(name || "").toLowerCase();
 
-    if (!players[key]) {
+    if (!name || !partyName) {
+
+        return res.status(400).json({
+
+            error: "Məlumat çatışmır"
+
+        });
+
+    }
+
+
+    const key =
+        name.toLowerCase();
+
+
+    const player =
+        players[key];
+
+
+    if (!player) {
+
         return res.status(404).json({
+
             error: "Oyunçu tapılmadı"
+
         });
+
     }
 
-    if (players[key].party) {
+
+    if (player.party) {
+
         return res.status(400).json({
-            error: "Sən artıq partiyadasan!"
+
+            error: "Sən artıq partiyadasan"
+
         });
+
     }
 
-    if (!partyName || !partyName.trim()) {
-        return res.status(400).json({
-            error: "Partiyanın adını yaz!"
-        });
-    }
 
-    const id = "party_" + Date.now();
+    const id =
+        "party_" +
+        Date.now();
+
 
     parties[id] = {
+
+        id: id,
+
         name: partyName.trim(),
+
         leader: key,
+
         members: [key],
-        region: players[key].region
+
+        region: player.region
+
     };
 
-    players[key].party = id;
+
+    player.party = id;
+
 
     res.json({
+
         success: true,
+
         party: parties[id],
-        player: players[key]
+
+        player: player
+
     });
+
 });
 
-/* ================= ELECTIONS ================= */
+
+/* =========================
+   JOIN PARTY
+========================= */
+
+app.post("/api/party/join", (req, res) => {
+
+    const { name, partyID } = req.body;
+
+
+    const key =
+        name.toLowerCase();
+
+
+    const player =
+        players[key];
+
+
+    const party =
+        parties[partyID];
+
+
+    if (!player || !party) {
+
+        return res.status(404).json({
+
+            error: "Oyunçu və ya partiya tapılmadı"
+
+        });
+
+    }
+
+
+    if (player.party) {
+
+        return res.status(400).json({
+
+            error: "Artıq partiyadasan"
+
+        });
+
+    }
+
+
+    if (player.region !== party.region) {
+
+        return res.status(400).json({
+
+            error:
+                "Bu partiya sənin bölgəndə yaradılmayıb"
+
+        });
+
+    }
+
+
+    player.party = partyID;
+
+    party.members.push(key);
+
+
+    res.json({
+
+        success: true,
+
+        player: player,
+
+        party: party
+
+    });
+
+});
+
+
+/* =========================
+   ELECTIONS
+========================= */
 
 app.get("/api/elections", (req, res) => {
+
     res.json(elections);
+
 });
+
+
+/* =========================
+   START ELECTION
+========================= */
 
 app.post("/api/election/start", (req, res) => {
 
     const { region } = req.body;
 
+
     if (!regions.includes(region)) {
+
         return res.status(400).json({
-            error: "Bölgə səhvdir"
+
+            error: "Bölgə düzgün deyil"
+
         });
+
     }
+
 
     if (
         elections[region] &&
-        !elections[region].finished
+        !elections[region].finished &&
+        elections[region].end > Date.now()
     ) {
+
         return res.status(400).json({
-            error: "Bu bölgədə artıq seçki var!"
+
+            error:
+                "Bu bölgədə artıq seçki var"
+
         });
+
     }
 
+
     elections[region] = {
+
+        region: region,
+
         start: Date.now(),
-        end: Date.now() + 120000,
+
+        end:
+            Date.now() +
+            (2 * 60 * 1000),
+
         votes: {},
+
         voters: {},
+
         results: {},
+
         finished: false
+
     };
 
+
     res.json({
+
         success: true,
-        election: elections[region]
+
+        election:
+            elections[region]
+
     });
+
 });
 
-/* ================= VOTE ================= */
 
-app.post("/api/vote", (req, res) => {
+/* =========================
+   VOTE
+========================= */
 
-    const { name, region, partyID } = req.body;
+app.post("/api/election/vote", (req, res) => {
 
-    const key = String(name || "").toLowerCase();
+    const {
+        name,
+        region,
+        partyID
+    } = req.body;
 
-    if (!players[key]) {
+
+    const key =
+        name.toLowerCase();
+
+
+    const player =
+        players[key];
+
+
+    const election =
+        elections[region];
+
+
+    const party =
+        parties[partyID];
+
+
+    if (!player) {
+
         return res.status(404).json({
             error: "Oyunçu tapılmadı"
         });
+
     }
 
-    const election = elections[region];
 
-    if (!election) {
+    if (!election || election.finished) {
+
         return res.status(400).json({
             error: "Aktiv seçki yoxdur"
         });
+
     }
 
+
     if (Date.now() >= election.end) {
+
         finishElection(region);
 
         return res.status(400).json({
-            error: "Seçki artıq bitib"
+            error: "Seçki bitib"
         });
+
     }
+
+
+    if (player.region !== region) {
+
+        return res.status(400).json({
+
+            error:
+                "Yalnız yaşadığın bölgədə səs verə bilərsən"
+
+        });
+
+    }
+
+
+    if (!party || party.region !== region) {
+
+        return res.status(400).json({
+
+            error:
+                "Bu partiya bu bölgədə iştirak etmir"
+
+        });
+
+    }
+
 
     if (election.voters[key]) {
+
         return res.status(400).json({
-            error: "Sən artıq səs vermisən!"
+
+            error:
+                "Artıq səs vermisən"
+
         });
+
     }
 
-    const party = parties[partyID];
-
-    if (!party) {
-        return res.status(400).json({
-            error: "Partiya tapılmadı"
-        });
-    }
-
-    if (party.region !== region) {
-        return res.status(400).json({
-            error: "Bu partiya bu bölgəyə aid deyil"
-        });
-    }
-
-    if (players[key].region !== region) {
-        return res.status(400).json({
-            error: "Yalnız yaşadığın bölgədə səs verə bilərsən"
-        });
-    }
 
     election.votes[partyID] =
         (election.votes[partyID] || 0) + 1;
 
+
     election.voters[key] = true;
 
+
     res.json({
-        success: true
+
+        success: true,
+
+        election: election
+
     });
+
 });
 
-/* ================= FINISH ELECTION ================= */
+
+/* =========================
+   FINISH ELECTION
+========================= */
 
 function finishElection(region) {
 
-    const election = elections[region];
+    const election =
+        elections[region];
 
-    if (!election || election.finished) {
+
+    if (!election)
         return;
-    }
+
+
+    if (election.finished)
+        return;
+
 
     let totalVotes = 0;
 
-    Object.values(election.votes).forEach(v => {
-        totalVotes += v;
-    });
+
+    Object.values(election.votes)
+        .forEach(vote => {
+
+            totalVotes += vote;
+
+        });
+
 
     const results = {};
 
-    Object.keys(election.votes).forEach(id => {
 
-        results[id] =
-            totalVotes === 0
-                ? 0
-                : Math.round(
-                    election.votes[id] /
-                    totalVotes *
-                    100
-                );
+    Object.keys(election.votes)
+        .forEach(partyID => {
 
-    });
+            if (totalVotes === 0) {
 
-    election.results = results;
-    election.finished = true;
+                results[partyID] = 0;
+
+            } else {
+
+                results[partyID] =
+                    Math.round(
+                        (
+                            election.votes[partyID] /
+                            totalVotes
+                        ) * 100
+                    );
+
+            }
+
+        });
+
+
+    election.results =
+        results;
+
+
+    election.finished =
+        true;
+
 }
 
-/* ================= AUTO FINISH ================= */
 
-setInterval(() => {
+/* =========================
+   ELECTION CHECK
+========================= */
 
-    regions.forEach(region => {
+app.get("/api/election/:region", (req, res) => {
 
-        const e = elections[region];
+    const region =
+        decodeURIComponent(
+            req.params.region
+        );
 
-        if (
-            e &&
-            !e.finished &&
-            Date.now() >= e.end
-        ) {
-            finishElection(region);
-        }
+
+    const election =
+        elections[region];
+
+
+    if (!election) {
+
+        return res.json({
+            election: null
+        });
+
+    }
+
+
+    if (
+        !election.finished &&
+        Date.now() >= election.end
+    ) {
+
+        finishElection(region);
+
+    }
+
+
+    res.json({
+
+        election: election
 
     });
 
-}, 1000);
+});
 
-/* ================= SERVER ================= */
 
-const PORT = process.env.PORT || 3000;
+/* =========================
+   TRAVEL
+========================= */
+
+app.post("/api/travel", (req, res) => {
+
+    const {
+        name,
+        region
+    } = req.body;
+
+
+    const key =
+        name.toLowerCase();
+
+
+    const player =
+        players[key];
+
+
+    if (!player) {
+
+        return res.status(404).json({
+
+            error:
+                "Oyunçu tapılmadı"
+
+        });
+
+    }
+
+
+    if (!regions.includes(region)) {
+
+        return res.status(400).json({
+
+            error:
+                "Bölgə düzgün deyil"
+
+        });
+
+    }
+
+
+    if (player.region === region) {
+
+        return res.status(400).json({
+
+            error:
+                "Artıq bu bölgədəsən"
+
+        });
+
+    }
+
+
+    if (player.money < 20) {
+
+        return res.status(400).json({
+
+            error:
+                "Səyahət üçün 20 pul lazımdır"
+
+        });
+
+    }
+
+
+    player.money -= 20;
+
+    player.region = region;
+
+
+    res.json({
+
+        success: true,
+
+        player: player
+
+    });
+
+});
+
+
+/* =========================
+   WARS
+========================= */
+
+app.get("/api/wars", (req, res) => {
+
+    res.json(wars);
+
+});
+
+
+/* =========================
+   CREATE WAR
+========================= */
+
+app.post("/api/war/create", (req, res) => {
+
+    const {
+        name,
+        target
+    } = req.body;
+
+
+    const key =
+        name.toLowerCase();
+
+
+    const attacker =
+        players[key];
+
+
+    if (!attacker) {
+
+        return res.status(404).json({
+
+            error:
+                "Oyunçu tapılmadı"
+
+        });
+
+    }
+
+
+    if (!target) {
+
+        return res.status(400).json({
+
+            error:
+                "Hədəf göstərilməyib"
+
+        });
+
+    }
+
+
+    const warID =
+        "war_" +
+        Date.now();
+
+
+    wars[warID] = {
+
+        id: warID,
+
+        attacker: key,
+
+        target: target,
+
+        attackerPower:
+            attacker.power,
+
+        active: true,
+
+        start: Date.now()
+
+    };
+
+
+    res.json({
+
+        success: true,
+
+        war:
+            wars[warID]
+
+    });
+
+});
+
+
+/* =========================
+   ADMIN UPDATE
+========================= */
+
+app.post("/api/admin/update", (req, res) => {
+
+    const {
+        playerName,
+        data
+    } = req.body;
+
+
+    const key =
+        playerName.toLowerCase();
+
+
+    if (!players[key]) {
+
+        return res.status(404).json({
+
+            error:
+                "Oyunçu tapılmadı"
+
+        });
+
+    }
+
+
+    players[key] = {
+
+        ...players[key],
+
+        ...data
+
+    };
+
+
+    res.json({
+
+        success: true,
+
+        player:
+            players[key]
+
+    });
+
+});
+
+
+/* =========================
+   ADMIN ACCOUNT
+========================= */
+
+players["admin"] = {
+
+    name: "Admin",
+
+    money: 999999,
+
+    power: 999,
+
+    stamina: 999,
+
+    moneyStat: 999,
+
+    training: 999,
+
+    region: "Şimal",
+
+    party: null
+
+};
+
+
+/* =========================
+   SERVER
+========================= */
+
+const PORT =
+    process.env.PORT || 3000;
+
 
 app.listen(PORT, () => {
+
     console.log(
-        "Rival Game Multiplayer Server başladı!"
+        "⚔️ Rival Game Multiplayer Server başladı!"
     );
+
 });
