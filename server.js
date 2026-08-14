@@ -45,7 +45,7 @@ app.post("/api/login", (req, res) => {
 
     const { name } = req.body;
 
-    if (!name || name.trim() === "") {
+    if (!name || typeof name !== "string" || name.trim() === "") {
 
         return res.status(400).json({
             error: "Ad yazılmalıdır"
@@ -54,9 +54,7 @@ app.post("/api/login", (req, res) => {
     }
 
     const cleanName = name.trim();
-
     const key = cleanName.toLowerCase();
-
 
     if (!players[key]) {
 
@@ -82,13 +80,9 @@ app.post("/api/login", (req, res) => {
 
     }
 
-
     res.json({
-
         success: true,
-
         player: players[key]
-
     });
 
 });
@@ -102,8 +96,8 @@ app.get("/api/player/:name", (req, res) => {
 
     const key =
         decodeURIComponent(req.params.name)
+        .trim()
         .toLowerCase();
-
 
     if (!players[key]) {
 
@@ -112,7 +106,6 @@ app.get("/api/player/:name", (req, res) => {
         });
 
     }
-
 
     res.json(players[key]);
 
@@ -138,7 +131,6 @@ app.post("/api/update", (req, res) => {
 
     const { name, data } = req.body;
 
-
     if (!name) {
 
         return res.status(400).json({
@@ -147,10 +139,8 @@ app.post("/api/update", (req, res) => {
 
     }
 
-
     const key =
-        name.trim().toLowerCase();
-
+        String(name).trim().toLowerCase();
 
     if (!players[key]) {
 
@@ -160,7 +150,6 @@ app.post("/api/update", (req, res) => {
 
     }
 
-
     if (!data || typeof data !== "object") {
 
         return res.status(400).json({
@@ -169,17 +158,26 @@ app.post("/api/update", (req, res) => {
 
     }
 
+    const allowed = [
+        "money",
+        "power",
+        "stamina",
+        "moneyStat",
+        "training",
+        "region",
+        "party"
+    ];
 
-    players[key] = {
+    allowed.forEach(field => {
 
-        ...players[key],
+        if (data[field] !== undefined) {
 
-        ...data,
+            players[key][field] =
+                data[field];
 
-        name: players[key].name
+        }
 
-    };
-
+    });
 
     res.json({
 
@@ -200,7 +198,6 @@ app.post("/api/work", (req, res) => {
 
     const { name } = req.body;
 
-
     if (!name) {
 
         return res.status(400).json({
@@ -209,10 +206,8 @@ app.post("/api/work", (req, res) => {
 
     }
 
-
     const key =
-        name.trim().toLowerCase();
-
+        String(name).trim().toLowerCase();
 
     if (!players[key]) {
 
@@ -222,17 +217,13 @@ app.post("/api/work", (req, res) => {
 
     }
 
-
     const player =
         players[key];
-
 
     const income =
         10 + ((player.moneyStat || 0) * 0.5);
 
-
     player.money += income;
-
 
     res.json({
 
@@ -268,13 +259,9 @@ app.get("/api/ranking", (req, res) => {
             const total =
 
                 (player.power || 0) +
-
                 (player.stamina || 0) +
-
                 (player.moneyStat || 0) +
-
                 (player.training || 0);
-
 
             return {
 
@@ -284,9 +271,11 @@ app.get("/api/ranking", (req, res) => {
 
                 stamina: player.stamina || 0,
 
-                moneyStat: player.moneyStat || 0,
+                moneyStat:
+                    player.moneyStat || 0,
 
-                training: player.training || 0,
+                training:
+                    player.training || 0,
 
                 total: total
 
@@ -297,7 +286,6 @@ app.get("/api/ranking", (req, res) => {
         .sort((a, b) =>
             b.total - a.total
         );
-
 
     res.json(ranking);
 
@@ -310,21 +298,22 @@ app.get("/api/ranking", (req, res) => {
 
 app.post("/api/party/create", (req, res) => {
 
-    const { name, partyName } = req.body;
-
+    const {
+        name,
+        partyName
+    } = req.body;
 
     if (!name || !partyName) {
 
         return res.status(400).json({
-            error: "Oyunçu və partiya adı lazımdır"
+            error:
+                "Oyunçu və partiya adı lazımdır"
         });
 
     }
 
-
     const playerKey =
-        name.trim().toLowerCase();
-
+        String(name).trim().toLowerCase();
 
     if (!players[playerKey]) {
 
@@ -334,30 +323,41 @@ app.post("/api/party/create", (req, res) => {
 
     }
 
-
     const player =
         players[playerKey];
-
 
     if (player.party) {
 
         return res.status(400).json({
-            error: "Sən artıq partiyadasan"
+            error:
+                "Sən artıq partiyadasan"
         });
 
     }
 
+    const cleanPartyName =
+        String(partyName).trim();
+
+    if (cleanPartyName === "") {
+
+        return res.status(400).json({
+            error:
+                "Partiya adı boş ola bilməz"
+        });
+
+    }
 
     const id =
         "party_" +
-        Date.now();
-
+        Date.now() +
+        "_" +
+        Math.floor(Math.random() * 10000);
 
     parties[id] = {
 
         id: id,
 
-        name: partyName.trim(),
+        name: cleanPartyName,
 
         leader: playerKey,
 
@@ -365,15 +365,11 @@ app.post("/api/party/create", (req, res) => {
             playerKey
         ],
 
-        region: player.region,
-
-        votes: 0
+        region: player.region
 
     };
 
-
     player.party = id;
-
 
     res.json({
 
@@ -408,7 +404,6 @@ app.get("/api/party/:id", (req, res) => {
     const party =
         parties[req.params.id];
 
-
     if (!party) {
 
         return res.status(404).json({
@@ -416,7 +411,6 @@ app.get("/api/party/:id", (req, res) => {
         });
 
     }
-
 
     res.json(party);
 
@@ -434,10 +428,16 @@ app.post("/api/party/join", (req, res) => {
         partyID
     } = req.body;
 
-
     const playerKey =
         name?.trim().toLowerCase();
 
+    if (!playerKey) {
+
+        return res.status(400).json({
+            error: "Oyunçu adı yoxdur"
+        });
+
+    }
 
     if (!players[playerKey]) {
 
@@ -447,10 +447,8 @@ app.post("/api/party/join", (req, res) => {
 
     }
 
-
     const party =
         parties[partyID];
-
 
     if (!party) {
 
@@ -460,19 +458,17 @@ app.post("/api/party/join", (req, res) => {
 
     }
 
-
     const player =
         players[playerKey];
-
 
     if (player.party) {
 
         return res.status(400).json({
-            error: "Sən artıq partiyadasan"
+            error:
+                "Sən artıq partiyadasan"
         });
 
     }
-
 
     if (player.region !== party.region) {
 
@@ -483,11 +479,13 @@ app.post("/api/party/join", (req, res) => {
 
     }
 
+    if (!party.members.includes(playerKey)) {
 
-    party.members.push(playerKey);
+        party.members.push(playerKey);
+
+    }
 
     player.party = partyID;
-
 
     res.json({
 
@@ -510,12 +508,10 @@ app.post("/api/party/leave", (req, res) => {
 
     const { name } = req.body;
 
-
     const playerKey =
         name?.trim().toLowerCase();
 
-
-    if (!players[playerKey]) {
+    if (!playerKey || !players[playerKey]) {
 
         return res.status(404).json({
             error: "Oyunçu tapılmadı"
@@ -523,10 +519,8 @@ app.post("/api/party/leave", (req, res) => {
 
     }
 
-
     const player =
         players[playerKey];
-
 
     if (!player.party) {
 
@@ -536,10 +530,11 @@ app.post("/api/party/leave", (req, res) => {
 
     }
 
+    const partyID =
+        player.party;
 
     const party =
-        parties[player.party];
-
+        parties[partyID];
 
     if (party) {
 
@@ -547,7 +542,6 @@ app.post("/api/party/leave", (req, res) => {
             party.members.filter(
                 id => id !== playerKey
             );
-
 
         if (party.leader === playerKey) {
 
@@ -558,7 +552,7 @@ app.post("/api/party/leave", (req, res) => {
 
             } else {
 
-                delete parties[party.id];
+                delete parties[partyID];
 
             }
 
@@ -566,9 +560,7 @@ app.post("/api/party/leave", (req, res) => {
 
     }
 
-
     player.party = null;
-
 
     res.json({
 
@@ -592,27 +584,28 @@ app.post("/api/election/start", (req, res) => {
         region
     } = req.body;
 
-
     if (
         !admin ||
-        admin.toLowerCase() !== "admin"
+        String(admin).toLowerCase() !== "admin"
     ) {
 
         return res.status(403).json({
-            error: "Admin icazəsi lazımdır"
+            error:
+                "Admin icazəsi lazımdır"
         });
 
     }
-
 
     if (!regions.includes(region)) {
 
         return res.status(400).json({
-            error: "Bölgə düzgün deyil"
+            error:
+                "Bölgə düzgün deyil"
         });
 
     }
 
+    finishExpiredElections();
 
     if (
         elections[region] &&
@@ -626,14 +619,12 @@ app.post("/api/election/start", (req, res) => {
 
     }
 
-
     const start =
         Date.now();
 
-
     const end =
-        start + (2 * 60 * 1000);
-
+        start +
+        (2 * 60 * 1000);
 
     elections[region] = {
 
@@ -653,12 +644,12 @@ app.post("/api/election/start", (req, res) => {
 
     };
 
-
     res.json({
 
         success: true,
 
-        election: elections[region]
+        election:
+            elections[region]
 
     });
 
@@ -689,9 +680,7 @@ app.get("/api/election/:region", (req, res) => {
             req.params.region
         );
 
-
     finishExpiredElections();
-
 
     if (!elections[region]) {
 
@@ -701,9 +690,11 @@ app.get("/api/election/:region", (req, res) => {
 
     }
 
-
     res.json({
-        election: elections[region]
+
+        election:
+            elections[region]
+
     });
 
 });
@@ -721,100 +712,97 @@ app.post("/api/election/vote", (req, res) => {
         partyID
     } = req.body;
 
-
     const playerKey =
         name?.trim().toLowerCase();
 
+    if (!playerKey) {
+
+        return res.status(400).json({
+            error:
+                "Oyunçu adı yoxdur"
+        });
+
+    }
 
     if (!players[playerKey]) {
 
         return res.status(404).json({
-            error: "Oyunçu tapılmadı"
+            error:
+                "Oyunçu tapılmadı"
         });
 
     }
 
+    finishExpiredElections();
 
     const player =
         players[playerKey];
 
-
     const election =
         elections[region];
-
 
     if (!election) {
 
         return res.status(400).json({
-            error: "Aktiv seçki yoxdur"
+            error:
+                "Aktiv seçki yoxdur"
         });
 
     }
 
-
-    if (Date.now() >= election.end) {
-
-        finishElection(region);
+    if (election.finished) {
 
         return res.status(400).json({
-            error: "Seçki artıq bitib"
+            error:
+                "Seçki artıq bitib"
         });
 
     }
-
 
     if (player.region !== region) {
 
         return res.status(403).json({
-
             error:
                 "Yalnız yaşadığın bölgədə səs verə bilərsən"
-
         });
 
     }
-
 
     if (election.voters[playerKey]) {
 
         return res.status(400).json({
-            error: "Sən artıq səs vermisən"
+            error:
+                "Sən artıq səs vermisən"
         });
 
     }
-
 
     const party =
         parties[partyID];
 
-
     if (!party) {
 
         return res.status(404).json({
-            error: "Partiya tapılmadı"
+            error:
+                "Partiya tapılmadı"
         });
 
     }
-
 
     if (party.region !== region) {
 
         return res.status(400).json({
-
             error:
                 "Bu partiya bu bölgədə iştirak etmir"
-
         });
 
     }
 
-
     election.votes[partyID] =
         (election.votes[partyID] || 0) + 1;
 
-
-    election.voters[playerKey] = true;
-
+    election.voters[playerKey] =
+        true;
 
     res.json({
 
@@ -836,14 +824,13 @@ function finishElection(region) {
     const election =
         elections[region];
 
-
-    if (!election)
+    if (!election) {
         return;
+    }
 
-
-    if (election.finished)
+    if (election.finished) {
         return;
-
+    }
 
     const totalVotes =
         Object.values(
@@ -855,9 +842,7 @@ function finishElection(region) {
             0
         );
 
-
     const results = {};
-
 
     Object.keys(
         election.votes
@@ -873,8 +858,7 @@ function finishElection(region) {
             results[partyID] =
                 Math.round(
                     (
-                        election.votes[partyID]
-                        /
+                        election.votes[partyID] /
                         totalVotes
                     ) * 100
                 );
@@ -883,10 +867,8 @@ function finishElection(region) {
 
     });
 
-
     election.results =
         results;
-
 
     election.finished =
         true;
@@ -900,46 +882,186 @@ function finishElection(region) {
 
 function finishExpiredElections() {
 
-    Object.keys(elections).forEach(region => {
+    Object.keys(elections)
+        .forEach(region => {
 
-        const election = elections[region];
+            const election =
+                elections[region];
 
-        if (
-            election &&
-            !election.finished &&
-            Date.now() >= election.end
-        ) {
+            if (
+                election &&
+                !election.finished &&
+                Date.now() >= election.end
+            ) {
 
-            finishElection(region);
+                finishElection(region);
 
-        }
+            }
 
-    });
+        });
 
 }
 
 
 /* =====================================================
-   AUTO CHECK ELECTIONS
+   SIMPLE WAR SYSTEM
 ===================================================== */
 
-setInterval(() => {
+app.post("/api/war/create", (req, res) => {
 
-    finishExpiredElections();
+    const {
+        name,
+        target
+    } = req.body;
 
-}, 1000);
+    const attackerKey =
+        name?.trim().toLowerCase();
+
+    const targetKey =
+        target?.trim().toLowerCase();
+
+    if (
+        !attackerKey ||
+        !targetKey
+    ) {
+
+        return res.status(400).json({
+            error:
+                "Hücum edən və hədəf lazımdır"
+        });
+
+    }
+
+    if (!players[attackerKey]) {
+
+        return res.status(404).json({
+            error:
+                "Hücum edən oyunçu tapılmadı"
+        });
+
+    }
+
+    if (!players[targetKey]) {
+
+        return res.status(404).json({
+            error:
+                "Hədəf oyunçu tapılmadı"
+        });
+
+    }
+
+    if (attackerKey === targetKey) {
+
+        return res.status(400).json({
+            error:
+                "Özünə müharibə elan edə bilməzsən"
+        });
+
+    }
+
+    const id =
+        "war_" +
+        Date.now() +
+        "_" +
+        Math.floor(Math.random() * 10000);
+
+    wars[id] = {
+
+        id: id,
+
+        attacker: attackerKey,
+
+        defender: targetKey,
+
+        attackerPower:
+            players[attackerKey].power || 0,
+
+        defenderPower:
+            players[targetKey].power || 0,
+
+        created:
+            Date.now(),
+
+        finished:
+            false
+
+    };
+
+    res.json({
+
+        success: true,
+
+        war: wars[id]
+
+    });
+
+});
 
 
 /* =====================================================
-   SERVER START
+   GET WARS
+===================================================== */
+
+app.get("/api/wars", (req, res) => {
+
+    res.json(wars);
+
+});
+
+
+/* =====================================================
+   GET ONE WAR
+===================================================== */
+
+app.get("/api/war/:id", (req, res) => {
+
+    const war =
+        wars[req.params.id];
+
+    if (!war) {
+
+        return res.status(404).json({
+            error:
+                "Müharibə tapılmadı"
+        });
+
+    }
+
+    res.json(war);
+
+});
+
+
+/* =====================================================
+   SERVER
 ===================================================== */
 
 const PORT = 3000;
 
-app.listen(PORT, "0.0.0.0", () => {
+app.listen(
+    PORT,
+    "0.0.0.0",
+    () => {
 
-    console.log(
-        `⚔️ Rival Game Server ${PORT} portunda işləyir!`
-    );
+        console.log(
+            "================================="
+        );
 
-});
+        console.log(
+            "⚔️ Rival Game Server işləyir!"
+        );
+
+        console.log(
+            "Port: " + PORT
+        );
+
+        console.log(
+            "http://localhost:" + PORT
+        );
+
+        console.log(
+            "================================="
+        );
+
+    }
+);
