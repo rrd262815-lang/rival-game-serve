@@ -900,13 +900,46 @@ function finishElection(region) {
 
 function finishExpiredElections() {
 
-    Object.keys(elections)
-        .forEach(region => {
+    Object.keys(elections).forEach(region => {
 
-            const election =
-                elections[region];
+        const election = elections[region];
+
+        if (
+            election &&
+            !election.finished &&
+            Date.now() >= election.end
+        ) {
+
+            finishElection(region);
+
+        }
+
+    });
+
+}
 
 
-            if (
-                election &&
-                !e
+/* =====================================================
+   AUTO CHECK ELECTIONS
+===================================================== */
+
+setInterval(() => {
+
+    finishExpiredElections();
+
+}, 1000);
+
+
+/* =====================================================
+   SERVER START
+===================================================== */
+
+const PORT = 3000;
+
+app.listen(PORT, "0.0.0.0", () => {
+
+    console.log(
+        `⚔️ Rival Game Server ${PORT} portunda işləyir!`
+    );
+
+});
